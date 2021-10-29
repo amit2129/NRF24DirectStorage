@@ -1,15 +1,21 @@
+#include "direct_storage_packet.h"
+#include "../testing/debug.h"
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h>
+
+extern send_packet(GeneralPacket *packet);
 
 void perform_ds_action(PacketAction *action) {
 	DirectStoragePacket ds_packet;
 	ds_packet.total_bytes = 0;
 	ds_packet.sequence_bytes = 0;
 	ds_packet.protocol = directStorage;
-	ds_packet.file_operation = action->action;
-	ds_packet.filename_len = strlen(action->input_str) - 1;
-	strcpy(ds_packet.filename, action->input_str);
+	ds_packet.file_operation = (file_op) action->action;
 	for (uint8_t i = 0; i < sizeof(ds_packet.data); i++) { ds_packet.data[i] = 0;}
-	send_time = micros();
+  #ifdef ARDUINO
 	Serial.println("Sending:");
+  #endif
 	print_ds_packet(&ds_packet);
 	send_packet((GeneralPacket *)&ds_packet);
 }
@@ -18,55 +24,51 @@ void perform_ds_action(PacketAction *action) {
 bool handle_ds_response(DirectStoragePacket *packet, uint8_t should_deliver_response) {
 	uint8_t opcode = should_deliver_response & 0b111;
 	if (opcode == 0) {
-		printf("response_code: %c\n", (packet->data[0]);
-		return;
+		printf("response_code: %c\n", (packet->data[0]));
+		return 0;
 	}
 	switch(opcode) {
 		case read_file:
 			// we're reading a file and this is the first packet
-			if (packet_ds->sequence_bytes < sizeof(packet_ds->data)) {
-				Serial.print(F("file contents: "));  
+			if (packet->sequence_bytes < sizeof(packet->data)) {
+				#ifdef ARDUINO
+          Serial.print(F("file contents: "));  
+        #endif
 			}
 		
 			// We're reading a file and this isn't the last packet
-			if (packet_ds->total_bytes - packet_ds->sequence_bytes > 0) {
+			if (packet->total_bytes - packet->sequence_bytes > 0) {
 				should_deliver_response = ((directStorage & 0b11) << 3) | (read_file &0b111);
-				Serial.print(packet_ds->data);
+        #ifdef ARDUINO
+				Serial.print(packet->data);
+        #endif
 			}
 			// Last packet has arrived, transfer over
 			else {
-				Serial.println(packet_ds->data);
+        #ifdef ARDUINO
+				Serial.println(packet->data);
+        #endif
 				should_deliver_response = 0;
 			}
 			break;
 	
 		case get_file_stats:
-			unsigned long newFileSize = (uint32_t)packet_ds->data[0] |
-				(uint32_t)packet_ds->data[1] << 8 |
-				(uint32_t)packet_ds->data[2] << 16 |
-				(uint32_t)packet_ds->data[3] << 24; 
-			printf("check_radio newFileSize: %lu\n", newFileSize);
+			printf("check_radio newFileSize: %lu\n", (uint32_t)packet->data[0] |
+        (uint32_t)packet->data[1] << 8 |
+        (uint32_t)packet->data[2] << 16 |
+        (uint32_t)packet->data[3] << 24 );
 			should_deliver_response = 0;
 			break;
-	
 		default:
 			should_deliver_response = 0;
-			printf("response_code: %c\n", ((DirectStoragePacket *)&packet)->data[0]);
+			printf("response_code: %c\n", packet->data[0]);
 			break;
 	}
 	return should_deliver_response;
 }
 
 
-
-
-void parse_ds_packet(DirectStoragePacket *packet, uint8_t *should_deliver_response) {
-  //  printf("operation: %d\n", packet->file_operation);
-    if (packet->file_operation == response) {
-      
-      return;
-    }
-
+void parse_ds_request(DirectStoragePacket *packet, uint8_t *should_deliver_response) {
     if (packet->file_operation == file_exists) {
       #ifdef HAS_SD
       bool file_exists = SD.exists(packet->filename);

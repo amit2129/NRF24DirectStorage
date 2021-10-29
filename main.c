@@ -16,11 +16,6 @@ uint8_t address[] = { "radio" };
 
 
 
-typedef struct _packet_action {
-	uint8_t protocol:2;
-	uint8_t action:3;
-	char input_str[20];
-} PacketAction;
 
 
 
